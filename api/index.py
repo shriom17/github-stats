@@ -304,5 +304,5 @@ def stats_svg(username: str):
     """
     return Response(content=svg_content, media_type="image/svg+xml")
 
-# Export the app for Vercel
-handler = app
+# Vercel requires the app to be exported
+app = app
