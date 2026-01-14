@@ -69,28 +69,32 @@ def get_user_stats(username: str, github_token: str = None):
         
         # Get language statistics from repositories
         languages = {}
-        repos_url = f"https://api.github.com/users/{username}/repos?per_page=100"
-        repos_response = httpx.get(repos_url, timeout=10.0, headers=headers)
+        repos_url = f"https://api.github.com/users/{username}/repos?per_page=100&sort=updated"
+        repos_response = httpx.get(repos_url, timeout=15.0, headers=headers)
         
         if repos_response.status_code == 200:
             repos = repos_response.json()
-            for repo in repos:
+            # Limit to first 50 repos to avoid timeout
+            for repo in repos[:50]:
                 # Include all repos, not just non-forked ones
                 lang_url = repo.get('languages_url')
                 if lang_url:
-                    lang_response = httpx.get(lang_url, timeout=5.0, headers=headers)
-                    if lang_response.status_code == 200:
-                        repo_languages = lang_response.json()
-                        for lang, bytes_count in repo_languages.items():
-                            languages[lang] = languages.get(lang, 0) + bytes_count
+                    try:
+                        lang_response = httpx.get(lang_url, timeout=3.0, headers=headers)
+                        if lang_response.status_code == 200:
+                            repo_languages = lang_response.json()
+                            for lang, bytes_count in repo_languages.items():
+                                languages[lang] = languages.get(lang, 0) + bytes_count
+                    except:
+                        continue
         
-        # Get top 5 languages
-        top_languages = sorted(languages.items(), key=lambda x: x[1], reverse=True)[:5]
+        # Get top 8 languages
+        top_languages = sorted(languages.items(), key=lambda x: x[1], reverse=True)[:8]
         total_bytes = sum(languages.values()) if languages else 1
         language_stats = [
             {"name": lang, "percentage": round((bytes_count / total_bytes) * 100, 1)}
             for lang, bytes_count in top_languages
-        ]
+        ] if top_languages else []
         
         # Calculate grade
         public_repos = data.get("public_repos", 0)
