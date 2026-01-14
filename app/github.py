@@ -53,6 +53,31 @@ def get_user_stats(username: str, github_token: str = None):
                 if "data" in graphql_data and graphql_data["data"]["user"]:
                     commits_this_year = graphql_data["data"]["user"]["contributionsCollection"]["contributionCalendar"]["totalContributions"]
         
+        # Get language statistics from repositories
+        languages = {}
+        repos_url = f"https://api.github.com/users/{username}/repos?per_page=100"
+        repos_response = httpx.get(repos_url, timeout=10.0, headers=headers)
+        
+        if repos_response.status_code == 200:
+            repos = repos_response.json()
+            for repo in repos:
+                if not repo.get('fork'):  # Skip forked repos
+                    lang_url = repo.get('languages_url')
+                    if lang_url:
+                        lang_response = httpx.get(lang_url, timeout=5.0, headers=headers)
+                        if lang_response.status_code == 200:
+                            repo_languages = lang_response.json()
+                            for lang, bytes_count in repo_languages.items():
+                                languages[lang] = languages.get(lang, 0) + bytes_count
+        
+        # Get top 5 languages
+        top_languages = sorted(languages.items(), key=lambda x: x[1], reverse=True)[:5]
+        total_bytes = sum(languages.values()) if languages else 1
+        language_stats = [
+            {"name": lang, "percentage": round((bytes_count / total_bytes) * 100, 1)}
+            for lang, bytes_count in top_languages
+        ]
+        
         # Calculate grade
         public_repos = data.get("public_repos", 0)
         followers = data.get("followers", 0)
@@ -69,7 +94,8 @@ def get_user_stats(username: str, github_token: str = None):
             "created_at": data.get("created_at"),
             "commits_this_year": commits_this_year,
             "grade": grade,
-            "avatar_url": data.get("avatar_url")
+            "avatar_url": data.get("avatar_url"),
+            "languages": language_stats
         }
     except httpx.HTTPError:
         return None
