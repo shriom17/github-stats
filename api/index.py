@@ -137,14 +137,14 @@ def calculate_grade(repos: int, followers: int, commits: int) -> str:
 def root():
     return {"message": "Welcome to the GitHub User Stats API"}
 
-@app.get("/api/stats")
+@app.get("/stats")
 def stats(username: str):
     stats_data = get_user_stats(username)
     if stats_data is None:
         return Response(content="User not found", status_code=404)
     return stats_data
 
-@app.get("/api/stats/svg")
+@app.get("/stats/svg")
 def stats_svg(username: str):
     stats_data = get_user_stats(username)
     if stats_data is None:
