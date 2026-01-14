@@ -75,14 +75,14 @@ def get_user_stats(username: str, github_token: str = None):
         if repos_response.status_code == 200:
             repos = repos_response.json()
             for repo in repos:
-                if not repo.get('fork'):  # Skip forked repos
-                    lang_url = repo.get('languages_url')
-                    if lang_url:
-                        lang_response = httpx.get(lang_url, timeout=5.0, headers=headers)
-                        if lang_response.status_code == 200:
-                            repo_languages = lang_response.json()
-                            for lang, bytes_count in repo_languages.items():
-                                languages[lang] = languages.get(lang, 0) + bytes_count
+                # Include all repos, not just non-forked ones
+                lang_url = repo.get('languages_url')
+                if lang_url:
+                    lang_response = httpx.get(lang_url, timeout=5.0, headers=headers)
+                    if lang_response.status_code == 200:
+                        repo_languages = lang_response.json()
+                        for lang, bytes_count in repo_languages.items():
+                            languages[lang] = languages.get(lang, 0) + bytes_count
         
         # Get top 5 languages
         top_languages = sorted(languages.items(), key=lambda x: x[1], reverse=True)[:5]
