@@ -33,7 +33,9 @@
 </table>
 
 ## 📸 Demo
-
+<p align = "center">
+   <img src = "./Screenshot 2026-01-15 140427.png" alt="GitHub Stat Demo" width=500>
+</p>
 ```
 https://your-domain.vercel.app/stats/svg?username=octocat
 ```
