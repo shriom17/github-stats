@@ -99,8 +99,39 @@ def stats_svg(username: str):
         '''
         y_offset += 34
     
+    # Generate contribution graph
+    contribution_days = stats_data.get('contribution_days', [])
+    contrib_graph = ""
+    if contribution_days:
+        max_contributions = max([day['count'] for day in contribution_days] or [1])
+        bar_width = 4
+        spacing = 1
+        graph_width = len(contribution_days) * (bar_width + spacing)
+        
+        for i, day in enumerate(contribution_days):
+            count = day['count']
+            # Scale bar height (max 60px)
+            bar_height = (count / max_contributions * 60) if max_contributions > 0 else 0
+            x_pos = i * (bar_width + spacing)
+            y_pos = 60 - bar_height
+            
+            # Color intensity based on contribution count
+            if count == 0:
+                color = "rgba(255,255,255,0.05)"
+            elif count <= 3:
+                color = "#0e4429"
+            elif count <= 6:
+                color = "#006d32"
+            elif count <= 9:
+                color = "#26a641"
+            else:
+                color = "#39d353"
+            
+            contrib_graph += f'<rect x="{x_pos}" y="{y_pos}" width="{bar_width}" height="{bar_height}" fill="{color}" rx="1"/>'
+    
     lang_section_height = len(languages) * 34 + 70 if languages else 0
-    svg_height = 290 + lang_section_height
+    contrib_section_height = 130 if contribution_days else 0
+    svg_height = 290 + lang_section_height + contrib_section_height
     
     svg_content = f"""
     <svg width="500" height="{svg_height}" xmlns="http://www.w3.org/2000/svg">
@@ -160,23 +191,41 @@ def stats_svg(username: str):
         <!-- Stats Grid -->
         <g transform="translate(35, 145)">
             <!-- Public Repos -->
-            <rect width="210" height="100" rx="12" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.1)" stroke-width="1" filter="url(#cardShadow)"/>
-            <text x="105" y="50" font-family="'Segoe UI', Arial, sans-serif" font-size="42" font-weight="800" fill="#ffffff" text-anchor="middle">{stats_data['public_repos']}</text>
-            <text x="105" y="73" font-family="'Segoe UI', Arial, sans-serif" font-size="13" fill="#cbd5e0" text-anchor="middle" font-weight="600">Public Repositories</text>
+            <rect width="135" height="100" rx="12" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.1)" stroke-width="1" filter="url(#cardShadow)"/>
+            <text x="67.5" y="50" font-family="'Segoe UI', Arial, sans-serif" font-size="38" font-weight="800" fill="#ffffff" text-anchor="middle">{stats_data['public_repos']}</text>
+            <text x="67.5" y="73" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#cbd5e0" text-anchor="middle" font-weight="600">Public Repos</text>
         </g>
         
-        <g transform="translate(255, 145)">
+        <g transform="translate(180, 145)">
             <!-- Commits This Year -->
-            <rect width="210" height="100" rx="12" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.1)" stroke-width="1" filter="url(#cardShadow)"/>
-            <text x="105" y="50" font-family="'Segoe UI', Arial, sans-serif" font-size="42" font-weight="800" fill="{grade_color}" text-anchor="middle" filter="url(#glow)">{stats_data['commits_this_year']}</text>
-            <text x="105" y="73" font-family="'Segoe UI', Arial, sans-serif" font-size="13" fill="#cbd5e0" text-anchor="middle" font-weight="600">Contributions 2026</text>
+            <rect width="135" height="100" rx="12" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.1)" stroke-width="1" filter="url(#cardShadow)"/>
+            <text x="67.5" y="50" font-family="'Segoe UI', Arial, sans-serif" font-size="38" font-weight="800" fill="{grade_color}" text-anchor="middle" filter="url(#glow)">{stats_data['commits_this_year']}</text>
+            <text x="67.5" y="73" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#cbd5e0" text-anchor="middle" font-weight="600">Contributions</text>
         </g>
+        
+        <g transform="translate(325, 145)">
+            <!-- Max Streak -->
+            <rect width="140" height="100" rx="12" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.1)" stroke-width="1" filter="url(#cardShadow)"/>
+            <text x="70" y="50" font-family="'Segoe UI', Arial, sans-serif" font-size="38" font-weight="800" fill="#ff6b6b" text-anchor="middle" filter="url(#glow)">{stats_data.get('max_streak', 0)}</text>
+            <text x="70" y="73" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#cbd5e0" text-anchor="middle" font-weight="600">🔥 Max Streak</text>
+        </g>
+        
+        <!-- Contribution Graph Section -->
+        {f'''<g transform="translate(35, 265)">
+            <text x="0" y="0" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff">📊 Daily Contributions (Last 90 Days)</text>
+        </g>
+        <g transform="translate(40, 295)">
+            <rect x="0" y="0" width="420" height="80" rx="8" fill="rgba(255,255,255,0.03)"/>
+            <g transform="translate(5, 10)">
+                {contrib_graph}
+            </g>
+        </g>''' if contribution_days else ''}
         
         <!-- Languages Section -->
-        {f'''<g transform="translate(35, 285)">
+        {f'''<g transform="translate(35, {285 + contrib_section_height})">
             <text x="0" y="0" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff">💻 Most Used Languages</text>
         </g>
-        <g transform="translate(40, 315)">
+        <g transform="translate(40, {315 + contrib_section_height})">
             {lang_bars}
         </g>''' if languages else ''}
     </svg>

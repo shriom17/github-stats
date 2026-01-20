@@ -24,10 +24,12 @@ def get_user_stats(username: str, github_token: str = None):
         
         # Get contributions using GraphQL API
         commits_this_year = 0
+        max_streak = 0
+        contribution_days = []
         current_year = datetime.now().year
         
         if token:
-            # Use GraphQL to get accurate contribution count
+            # Use GraphQL to get accurate contribution count and daily data
             graphql_url = "https://api.github.com/graphql"
             query = """
             query($username: String!) {
@@ -35,6 +37,12 @@ def get_user_stats(username: str, github_token: str = None):
                 contributionsCollection {
                   contributionCalendar {
                     totalContributions
+                    weeks {
+                      contributionDays {
+                        contributionCount
+                        date
+                      }
+                    }
                   }
                 }
               }
@@ -51,7 +59,25 @@ def get_user_stats(username: str, github_token: str = None):
             if graphql_response.status_code == 200:
                 graphql_data = graphql_response.json()
                 if "data" in graphql_data and graphql_data["data"]["user"]:
-                    commits_this_year = graphql_data["data"]["user"]["contributionsCollection"]["contributionCalendar"]["totalContributions"]
+                    calendar = graphql_data["data"]["user"]["contributionsCollection"]["contributionCalendar"]
+                    commits_this_year = calendar["totalContributions"]
+                    
+                    # Get daily contributions for the last 365 days
+                    for week in calendar["weeks"]:
+                        for day in week["contributionDays"]:
+                            contribution_days.append({
+                                "date": day["date"],
+                                "count": day["contributionCount"]
+                            })
+                    
+                    # Calculate max streak
+                    current_streak = 0
+                    for day in contribution_days:
+                        if day["count"] > 0:
+                            current_streak += 1
+                            max_streak = max(max_streak, current_streak)
+                        else:
+                            current_streak = 0
         
         # Get language statistics from repositories
         languages = {}
@@ -103,6 +129,8 @@ def get_user_stats(username: str, github_token: str = None):
             "location": data.get("location"),
             "created_at": data.get("created_at"),
             "commits_this_year": commits_this_year,
+            "max_streak": max_streak,
+            "contribution_days": contribution_days[-90:],  # Last 90 days for graph
             "grade": grade,
             "avatar_url": data.get("avatar_url"),
             "languages": language_stats
