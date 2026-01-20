@@ -70,13 +70,23 @@ def get_user_stats(username: str, github_token: str = None):
                             for lang, bytes_count in repo_languages.items():
                                 languages[lang] = languages.get(lang, 0) + bytes_count
         
-        # Get top 5 languages
-        top_languages = sorted(languages.items(), key=lambda x: x[1], reverse=True)[:5]
+        # Get top 10 languages
+        top_languages = sorted(languages.items(), key=lambda x: x[1], reverse=True)[:10]
         total_bytes = sum(languages.values()) if languages else 1
-        language_stats = [
-            {"name": lang, "percentage": round((bytes_count / total_bytes) * 100, 1)}
-            for lang, bytes_count in top_languages
-        ]
+        
+        # Calculate percentages with proper rounding
+        language_stats = []
+        remaining_percentage = 100.0
+        
+        for i, (lang, bytes_count) in enumerate(top_languages):
+            if i == len(top_languages) - 1:
+                # Last language gets the remaining percentage to ensure sum = 100%
+                percentage = round(remaining_percentage, 1)
+            else:
+                percentage = round((bytes_count / total_bytes) * 100, 1)
+                remaining_percentage -= percentage
+            
+            language_stats.append({"name": lang, "percentage": percentage})
         
         # Calculate grade
         public_repos = data.get("public_repos", 0)
