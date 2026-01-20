@@ -99,38 +99,80 @@ def stats_svg(username: str):
         '''
         y_offset += 34
     
-    # Generate contribution graph
+    # Generate contribution graph (smooth curve)
     contribution_days = stats_data.get('contribution_days', [])
     contrib_graph = ""
+    contrib_path = ""
+    contrib_area = ""
+    x_labels = ""
+    y_labels = ""
+    
     if contribution_days:
         max_contributions = max([day['count'] for day in contribution_days] or [1])
-        bar_width = 4
-        spacing = 1
-        graph_width = len(contribution_days) * (bar_width + spacing)
+        graph_width = 380
+        graph_height = 60
+        
+        # Calculate points for the curve
+        points = []
+        num_days = len(contribution_days)
         
         for i, day in enumerate(contribution_days):
             count = day['count']
-            # Scale bar height (max 60px)
-            bar_height = (count / max_contributions * 60) if max_contributions > 0 else 0
-            x_pos = i * (bar_width + spacing)
-            y_pos = 60 - bar_height
+            x = (i / (num_days - 1)) * graph_width if num_days > 1 else 0
+            y = graph_height - (count / max_contributions * graph_height) if max_contributions > 0 else graph_height
+            points.append((x, y))
+        
+        # Create smooth curve path using quadratic bezier curves
+        if len(points) >= 2:
+            # Start the path
+            path_d = f"M {points[0][0]},{points[0][1]}"
             
-            # Color intensity based on contribution count
-            if count == 0:
-                color = "rgba(255,255,255,0.05)"
-            elif count <= 3:
-                color = "#0e4429"
-            elif count <= 6:
-                color = "#006d32"
-            elif count <= 9:
-                color = "#26a641"
-            else:
-                color = "#39d353"
+            for i in range(1, len(points)):
+                # Calculate control point for smooth curve
+                if i < len(points) - 1:
+                    # Midpoint between current and next point for smooth curve
+                    cp_x = (points[i][0] + points[i-1][0]) / 2
+                    path_d += f" Q {points[i-1][0]},{points[i-1][1]} {cp_x},{points[i][1]}"
+                else:
+                    # Last point
+                    path_d += f" L {points[i][0]},{points[i][1]}"
             
-            contrib_graph += f'<rect x="{x_pos}" y="{y_pos}" width="{bar_width}" height="{bar_height}" fill="{color}" rx="1"/>'
+            contrib_path = path_d
+            
+            # Create area under curve with gradient
+            area_d = path_d + f" L {graph_width},{graph_height} L 0,{graph_height} Z"
+            contrib_area = area_d
+            
+            # Create dots on the curve for visual appeal
+            contrib_dots = ""
+            for i, (x, y) in enumerate(points):
+                if i % 3 == 0:  # Show every 3rd dot to avoid clutter
+                    count = contribution_days[i]['count']
+                    contrib_dots += f'<circle cx="{x}" cy="{y}" r="2.5" fill="#39d353" opacity="0.9"><title>{count} contributions</title></circle>'
+            
+            contrib_graph = contrib_dots
+            
+            # Generate Y-axis labels (contribution counts)
+            y_step = max_contributions / 3
+            for i in range(4):
+                y_value = int(max_contributions - (i * y_step))
+                y_pos = (i * graph_height / 3)
+                y_labels += f'<text x="-5" y="{y_pos + 4}" font-family="\'Segoe UI\', Arial, sans-serif" font-size="9" fill="#718096" text-anchor="end">{y_value}</text>'
+            
+            # Generate X-axis labels (dates)
+            # Show start, middle, and end dates
+            from datetime import datetime as dt
+            if num_days >= 3:
+                for idx in [0, num_days // 2, num_days - 1]:
+                    if idx < len(contribution_days):
+                        date_str = contribution_days[idx]['date']
+                        date_obj = dt.strptime(date_str, "%Y-%m-%d")
+                        label = date_obj.strftime("%b %d")
+                        x_pos = (idx / (num_days - 1)) * graph_width if num_days > 1 else 0
+                        x_labels += f'<text x="{x_pos}" y="75" font-family="\'Segoe UI\', Arial, sans-serif" font-size="9" fill="#718096" text-anchor="middle">{label}</text>'
     
     lang_section_height = len(languages) * 34 + 70 if languages else 0
-    contrib_section_height = 130 if contribution_days else 0
+    contrib_section_height = 145 if contribution_days else 0
     svg_height = 290 + lang_section_height + contrib_section_height
     
     svg_content = f"""
@@ -144,6 +186,10 @@ def stats_svg(username: str):
             <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" style="stop-color:rgba(255,255,255,0.1);stop-opacity:1" />
                 <stop offset="100%" style="stop-color:rgba(255,255,255,0.05);stop-opacity:1" />
+            </linearGradient>
+            <linearGradient id="areaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#39d353;stop-opacity:0.3" />
+                <stop offset="100%" style="stop-color:#39d353;stop-opacity:0.05" />
             </linearGradient>
             <filter id="shadow">
                 <feDropShadow dx="0" dy="6" stdDeviation="8" flood-opacity="0.3"/>
@@ -212,12 +258,43 @@ def stats_svg(username: str):
         
         <!-- Contribution Graph Section -->
         {f'''<g transform="translate(35, 265)">
-            <text x="0" y="0" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff">📊 Daily Contributions (Last 90 Days)</text>
+            <text x="0" y="0" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff">📊 Contribution Activity</text>
+            <text x="0" y="18" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#a0aec0" font-weight="500">Last 90 days</text>
         </g>
-        <g transform="translate(40, 295)">
-            <rect x="0" y="0" width="420" height="80" rx="8" fill="rgba(255,255,255,0.03)"/>
-            <g transform="translate(5, 10)">
+        <g transform="translate(50, 310)">
+            <rect x="-10" y="0" width="420" height="105" rx="10" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+            
+            <!-- Y-axis labels -->
+            <g transform="translate(0, 15)">
+                {y_labels}
+            </g>
+            
+            <!-- Graph area -->
+            <g transform="translate(10, 15)">
+                <!-- Grid lines -->
+                <line x1="0" y1="15" x2="380" y2="15" stroke="rgba(255,255,255,0.05)" stroke-width="1" stroke-dasharray="4,4"/>
+                <line x1="0" y1="30" x2="380" y2="30" stroke="rgba(255,255,255,0.05)" stroke-width="1" stroke-dasharray="4,4"/>
+                <line x1="0" y1="45" x2="380" y2="45" stroke="rgba(255,255,255,0.05)" stroke-width="1" stroke-dasharray="4,4"/>
+                <line x1="0" y1="60" x2="380" y2="60" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+                
+                <!-- Y-axis line -->
+                <line x1="0" y1="0" x2="0" y2="60" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+                <!-- X-axis line -->
+                <line x1="0" y1="60" x2="380" y2="60" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+                
+                <!-- Area under curve -->
+                <path d="{contrib_area}" fill="url(#areaGrad)"/>
+                
+                <!-- Curve line -->
+                <path d="{contrib_path}" fill="none" stroke="#39d353" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <animate attributeName="stroke-dashoffset" from="1000" to="0" dur="1.5s" fill="freeze"/>
+                </path>
+                
+                <!-- Data points -->
                 {contrib_graph}
+                
+                <!-- X-axis labels -->
+                {x_labels}
             </g>
         </g>''' if contribution_days else ''}
         
