@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.responses import Response
 import os
 import httpx
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = FastAPI()
 
@@ -67,6 +67,67 @@ def get_user_stats(username: str, github_token: str = None):
                 if "data" in graphql_data and graphql_data["data"]["user"]:
                     commits_this_year = graphql_data["data"]["user"]["contributionsCollection"]["contributionCalendar"]["totalContributions"]
         
+        # Get contribution calendar data (last 90 days)
+        contribution_days = []
+        max_streak = 0
+        current_streak = 0
+        
+        if token:
+            from_date_90 = (datetime.now() - __import__('timedelta', fromlist=['timedelta'])(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            to_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+            
+            contrib_query = """
+            query($username: String!, $from: DateTime!, $to: DateTime!) {
+              user(login: $username) {
+                contributionsCollection(from: $from, to: $to) {
+                  contributionCalendar {
+                    weeks {
+                      contributionDays {
+                        date
+                        contributionCount
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+            
+            try:
+                contrib_response = httpx.post(
+                    graphql_url,
+                    json={
+                        "query": contrib_query,
+                        "variables": {
+                            "username": username,
+                            "from": from_date_90,
+                            "to": to_date
+                        }
+                    },
+                    headers=headers,
+                    timeout=10.0
+                )
+                
+                if contrib_response.status_code == 200:
+                    contrib_data = contrib_response.json()
+                    if "data" in contrib_data and contrib_data["data"]["user"]:
+                        weeks = contrib_data["data"]["user"]["contributionsCollection"]["contributionCalendar"]["weeks"]
+                        for week in weeks:
+                            for day in week["contributionDays"]:
+                                contribution_days.append({
+                                    "date": day["date"],
+                                    "count": day["contributionCount"]
+                                })
+                                
+                                # Calculate streaks
+                                if day["contributionCount"] > 0:
+                                    current_streak += 1
+                                    max_streak = max(max_streak, current_streak)
+                                else:
+                                    current_streak = 0
+            except:
+                pass
+        
         # Get language statistics from repositories
         languages = {}
         repos_url = f"https://api.github.com/users/{username}/repos?per_page=100&sort=updated"
@@ -113,7 +174,9 @@ def get_user_stats(username: str, github_token: str = None):
             "commits_this_year": commits_this_year,
             "grade": grade,
             "avatar_url": data.get("avatar_url"),
-            "languages": language_stats
+            "languages": language_stats,
+            "contribution_days": contribution_days,
+            "max_streak": max_streak
         }
     except httpx.HTTPError:
         return None
